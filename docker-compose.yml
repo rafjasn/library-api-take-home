@@ -1,0 +1,58 @@
+name: library-api
+
+x-api-image: &api-image
+  build: .
+  image: library-api:latest
+  environment:
+    DATABASE_URL: postgresql+asyncpg://library:library@db:5432/library
+
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: library
+      POSTGRES_PASSWORD: library
+      POSTGRES_DB: library
+    volumes:
+      - pgdata:/var/lib/postgresql
+    # Checked every second while starting, then every 30 seconds. -h localhost checks over
+    # TCP like the other services connect: on first start the image runs a setup server
+    # that only listens on a local socket, which a socket check would report as ready.
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "localhost", "-U", "library", "-d", "library"]
+      start_period: 30s
+      start_interval: 1s
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Applies database migrations once, then exits. The API starts only if it succeeded.
+  migrate:
+    <<: *api-image
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    <<: *api-image
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    # Same rhythm: every second until healthy, then every 30 seconds (one log line each).
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://localhost:8000/health')
+      start_period: 30s
+      start_interval: 1s
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  pgdata:

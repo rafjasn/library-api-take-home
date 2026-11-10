@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  checks:
+    name: Lint, types, tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+      - run: uv sync --locked
+      - run: uv run ruff format --check .
+      - run: uv run ruff check .
+      - run: uv run mypy .
+      - run: uv run pytest  # starts PostgreSQL through testcontainers
+
+  compose:
+    name: docker compose up
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: docker compose up --build --detach --wait
+      - name: Smoke test
+        run: |
+          curl --fail-with-body -X POST localhost:8000/books \
+            -H 'content-type: application/json' \
+            -d '{"serial_number": "000123", "title": "Lalka", "author": "Bolesław Prus"}'
+          curl --fail-with-body localhost:8000/books
+      - if: failure()
+        run: docker compose logs
+      - if: always()
+        run: docker compose down --volumes
