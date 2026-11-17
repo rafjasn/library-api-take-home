@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM python:3.14-slim AS build
+FROM python:3.15-slim AS build
 COPY --from=ghcr.io/astral-sh/uv:0.13.7 /uv /bin/uv
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=0
 WORKDIR /app
@@ -14,7 +14,7 @@ COPY migrations ./migrations
 COPY app ./app
 
 
-FROM python:3.14-slim
+FROM python:3.15-slim
 RUN useradd --system --no-create-home --uid 10001 app
 WORKDIR /app
 COPY --from=build /app /app
